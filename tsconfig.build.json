@@ -3,11 +3,13 @@
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "types": []
   },
   "include": ["src/**/*.ts"],
   "exclude": [
     "src/**/*.test.ts",
-    "src/test/**/*.ts"
+    "src/test/**/*.ts",
+    "node_modules"
   ]
 }
