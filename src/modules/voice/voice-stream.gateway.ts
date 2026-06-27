@@ -63,7 +63,7 @@ export class VoiceStreamGateway {
         return;
       }
 
-      if (!this.isAuthorized(url)) {
+      if (!this.isAuthorized(url, request)) {
         this.logger.warn(
           {
             enabled: this.config.twilioMediaStreamEnabled,
@@ -496,16 +496,24 @@ export class VoiceStreamGateway {
     return new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
   }
 
-  private isAuthorized(url: URL): boolean {
+  private isAuthorized(url: URL, request: IncomingMessage): boolean {
     if (!this.config.twilioMediaStreamEnabled) {
       return false;
     }
 
-    if (!this.config.twilioMediaStreamSecret) {
-      return false;
+    // If token is present, validate it
+    const token = url.searchParams.get("token");
+    if (token && this.config.twilioMediaStreamSecret) {
+      return token === this.config.twilioMediaStreamSecret;
     }
 
-    return url.searchParams.get("token") === this.config.twilioMediaStreamSecret;
+    // Fallback: If Twilio strips query params, verify request comes from Twilio user-agent
+    const userAgent = request.headers["user-agent"];
+    if (userAgent && userAgent.startsWith("Twilio")) {
+      return true;
+    }
+
+    return false;
   }
 
   private rejectUpgrade(socket: Duplex, statusCode: number, message: string): void {
