@@ -11,7 +11,8 @@ export class GeminiService {
 
   /**
    * Generates a 768-dimension vector embedding for the given text
-   * using Google's text-embedding-004 model.
+   * using Google's gemini-embedding-exp-03-07 model truncated to 768 dims
+   * for backward compatibility with existing database vector columns.
    */
   public async generateEmbedding(text: string): Promise<number[]> {
     if (!text || text.trim() === "") {
@@ -19,8 +20,11 @@ export class GeminiService {
     }
 
     const response = await this.ai.models.embedContent({
-      model: "text-embedding-004",
-      contents: text
+      model: "gemini-embedding-exp-03-07",
+      contents: text,
+      config: {
+        outputDimensionality: 768
+      }
     });
 
     const values = response.embeddings?.[0]?.values;

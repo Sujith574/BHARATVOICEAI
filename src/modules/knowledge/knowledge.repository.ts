@@ -103,7 +103,7 @@ export class KnowledgeRepository {
             ${embeddingId}::uuid,
             ${createdChunk.id}::uuid,
             'gemini',
-            'text-embedding-004',
+            'gemini-embedding-exp-03-07',
             768,
             cast(${vectorString} as vector),
             NOW(),
