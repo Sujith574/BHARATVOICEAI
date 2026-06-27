@@ -10,6 +10,15 @@ export const createErrorHandler =
     const requestId = response.getHeader("x-request-id");
 
     if (error instanceof ZodError) {
+      logger.warn(
+        {
+          err: error.flatten(),
+          body: _request.body,
+          url: _request.originalUrl,
+          requestId
+        },
+        "Zod validation error"
+      );
       response.status(400).json({
         error: {
           code: "VALIDATION_ERROR",
