@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: bharat-voice-backend
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: APP_NAME
+        value: bharat-voice-backend
+      - key: APP_VERSION
+        value: 0.1.0
+      - key: API_PREFIX
+        value: /api/v1
+      - key: LOG_LEVEL
+        value: info
+      - key: TRUST_PROXY_HOPS
+        value: 1
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: DEFAULT_ADMIN_ROLE_CODE
+        value: ADMIN_VIEWER
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 60000
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 120
+      - key: WS_HEARTBEAT_INTERVAL_MS
+        value: 15000
+      - key: TWILIO_SIGNATURE_VALIDATION_ENABLED
+        value: false
+      - key: TWILIO_MEDIA_STREAM_ENABLED
+        value: true
+      - key: TWILIO_DEFAULT_LANGUAGE
+        value: hi-IN
+      # Secrets to be filled in the Render Dashboard:
+      # - DATABASE_URL
+      # - SUPABASE_URL
+      # - SUPABASE_ANON_KEY
+      # - SUPABASE_SERVICE_ROLE_KEY
+      # - GEMINI_API_KEY
+      # - SARVAM_API_KEY
+      # - TWILIO_ACCOUNT_SID
+      # - TWILIO_AUTH_TOKEN
+      # - TWILIO_PHONE_NUMBER
+      # - TWILIO_MEDIA_STREAM_PUBLIC_URL
+      # - TWILIO_MEDIA_STREAM_SECRET
+      # - SUPER_ADMIN_EMAILS
