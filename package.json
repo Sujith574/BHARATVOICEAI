@@ -1,5 +1,5 @@
 {
-
+  "name": "bharat-voice-backend",
   "version": "0.1.0",
   "private": true,
   "description": "Production-grade backend foundation for the Bharat Voice citizen assistance platform.",
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
