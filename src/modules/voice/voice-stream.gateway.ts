@@ -48,16 +48,35 @@ export class VoiceStreamGateway {
   public attach(server: Server): void {
     server.on("upgrade", (request, socket, head) => {
       const url = this.getUrl(request);
+      
+      this.logger.info(
+        {
+          pathname: url.pathname,
+          search: url.search,
+          headers: request.headers
+        },
+        "Received WebSocket upgrade request"
+      );
 
       if (url.pathname !== `${this.config.apiPrefix}/voice/media-stream`) {
+        this.logger.warn({ pathname: url.pathname }, "WebSocket upgrade request pathname mismatch");
         return;
       }
 
       if (!this.isAuthorized(url)) {
+        this.logger.warn(
+          {
+            enabled: this.config.twilioMediaStreamEnabled,
+            hasSecret: !!this.config.twilioMediaStreamSecret,
+            tokenParam: url.searchParams.get("token")
+          },
+          "WebSocket upgrade request unauthorized"
+        );
         this.rejectUpgrade(socket, 401, "Unauthorized");
         return;
       }
 
+      this.logger.info("WebSocket upgrade request authorized, handling upgrade");
       this.webSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
         this.handleConnection(webSocket, request);
       });

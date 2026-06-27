@@ -90,6 +90,10 @@ export class VoiceService {
       "Received Twilio voice status callback"
     );
 
+    if (!payload.callStatus) {
+      return;
+    }
+
     const prismaStatus = TWILIO_TO_CALL_STATUS[payload.callStatus.toLowerCase()];
     if (!prismaStatus) {
       return;

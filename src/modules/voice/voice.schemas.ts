@@ -21,7 +21,7 @@ export const incomingCallSchema = z
 export const statusCallbackSchema = z
   .object({
     CallSid: z.string().min(1),
-    CallStatus: z.string().min(1),
+    CallStatus: z.string().optional(),
     StreamSid: z.string().optional().or(z.literal("").transform(() => undefined)),
     Timestamp: z.string().optional().or(z.literal("").transform(() => undefined))
   })
