@@ -117,6 +117,10 @@ export class VoiceService {
     const streamUrl = this.config.twilioMediaStreamPublicUrl ?? this.deriveMediaStreamUrlFromPublicBase();
     const url = new URL(streamUrl);
 
+    if (url.pathname === "/" || url.pathname === "") {
+      url.pathname = `${this.config.apiPrefix}/voice/media-stream`;
+    }
+
     if (this.config.twilioMediaStreamSecret) {
       url.searchParams.set("token", this.config.twilioMediaStreamSecret);
     }
