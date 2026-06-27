@@ -1,0 +1,525 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum AssignmentScope {
+  GLOBAL
+  STATE
+  DEPARTMENT
+  SERVICE
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum ApprovalStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum DocumentSourceType {
+  OFFICIAL_WEBSITE
+  OFFICIAL_PDF
+  GAZETTE
+  CIRCULAR
+  GUIDELINE
+  SCHEME_DOCUMENT
+  NOTIFICATION
+  MANUAL_UPLOAD
+}
+
+enum CallStatus {
+  INITIATED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  NO_ANSWER
+  BUSY
+  CANCELED
+}
+
+enum ConversationSpeakerRole {
+  CITIZEN
+  ASSISTANT
+  SYSTEM
+  HUMAN_AGENT
+}
+
+enum FeedbackSource {
+  CALL
+  MOBILE_APP
+  ADMIN
+}
+
+enum NotificationType {
+  SYSTEM
+  SECURITY
+  TICKET
+  KNOWLEDGE
+  CALL
+  ANALYTICS
+}
+
+enum SettingScope {
+  SYSTEM
+  STATE
+  DEPARTMENT
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+  DEPRECATED
+}
+
+model User {
+  id                 String         @id @default(uuid()) @db.Uuid
+  supabaseAuthUserId String         @unique @map("supabase_auth_user_id") @db.Uuid
+  email              String         @unique @db.VarChar(320)
+  phoneNumber        String?        @unique @map("phone_number") @db.VarChar(32)
+  fullName           String?        @map("full_name") @db.VarChar(200)
+  preferredLanguage  String?        @map("preferred_language") @db.VarChar(16)
+  stateCode          String?        @map("state_code") @db.VarChar(8)
+  status             UserStatus     @default(ACTIVE)
+  lastLoginAt        DateTime?      @map("last_login_at") @db.Timestamptz(6)
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userRoles          UserRole[]
+  uploadedDocuments  KnowledgeDocument[] @relation("UploadedDocuments")
+  approvedDocuments  KnowledgeDocument[] @relation("ApprovedDocuments")
+  assignedTickets    Ticket[]       @relation("AssignedTickets")
+  notifications      Notification[]
+  auditLogsAsActor   AuditLog[]     @relation("AuditLogActor")
+  auditLogsAsSubject AuditLog[]     @relation("AuditLogSubject")
+  feedbackEntries    Feedback[]
+  deviceTokens       DeviceToken[]
+
+  @@index([email])
+  @@index([status])
+  @@map("users")
+}
+
+model Role {
+  id              String           @id @default(uuid()) @db.Uuid
+  code            String           @unique @db.VarChar(100)
+  name            String           @db.VarChar(120)
+  description     String?          @db.Text
+  isSystemRole    Boolean          @default(true) @map("is_system_role")
+  status          RecordStatus     @default(ACTIVE)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@index([status])
+  @@map("roles")
+}
+
+model Permission {
+  id              String           @id @default(uuid()) @db.Uuid
+  code            String           @unique @db.VarChar(150)
+  name            String           @db.VarChar(150)
+  description     String?          @db.Text
+  status          RecordStatus     @default(ACTIVE)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  rolePermissions RolePermission[]
+
+  @@index([status])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid()) @db.Uuid
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id           String          @id @default(uuid()) @db.Uuid
+  userId       String          @map("user_id") @db.Uuid
+  roleId       String          @map("role_id") @db.Uuid
+  scope        AssignmentScope @default(GLOBAL)
+  stateCode    String?         @map("state_code") @db.VarChar(8)
+  departmentId String?         @map("department_id") @db.Uuid
+  serviceId    String?         @map("service_id") @db.Uuid
+  assignedAt   DateTime        @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         Role            @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  department   Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  service      Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([roleId])
+  @@index([departmentId])
+  @@index([serviceId])
+  @@map("user_roles")
+}
+
+model Department {
+  id                 String              @id @default(uuid()) @db.Uuid
+  code               String              @unique @db.VarChar(100)
+  name               String              @db.VarChar(200)
+  stateCode          String              @map("state_code") @db.VarChar(8)
+  description        String?             @db.Text
+  status             RecordStatus        @default(ACTIVE)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  services           Service[]
+  schemes            Scheme[]
+  knowledgeDocuments KnowledgeDocument[]
+  userRoles          UserRole[]
+  assignedCalls      Call[]
+  tickets            Ticket[]
+  settings           PlatformSetting[]
+  analyticsSnapshots AnalyticsSnapshot[]
+
+  @@index([stateCode])
+  @@index([status])
+  @@map("departments")
+}
+
+model Service {
+  id                 String              @id @default(uuid()) @db.Uuid
+  departmentId       String              @map("department_id") @db.Uuid
+  code               String              @unique @db.VarChar(120)
+  name               String              @db.VarChar(200)
+  description        String?             @db.Text
+  stateCode          String              @map("state_code") @db.VarChar(8)
+  status             RecordStatus        @default(ACTIVE)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  department         Department          @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  schemes            Scheme[]
+  knowledgeDocuments KnowledgeDocument[]
+  userRoles          UserRole[]
+  analyticsSnapshots AnalyticsSnapshot[]
+
+  @@index([departmentId])
+  @@index([stateCode])
+  @@index([status])
+  @@map("services")
+}
+
+model Scheme {
+  id                 String              @id @default(uuid()) @db.Uuid
+  departmentId       String              @map("department_id") @db.Uuid
+  serviceId          String?             @map("service_id") @db.Uuid
+  code               String              @unique @db.VarChar(120)
+  name               String              @db.VarChar(200)
+  description        String?             @db.Text
+  stateCode          String              @map("state_code") @db.VarChar(8)
+  status             RecordStatus        @default(ACTIVE)
+  effectiveFrom      DateTime?           @map("effective_from") @db.Timestamptz(6)
+  effectiveUntil     DateTime?           @map("effective_until") @db.Timestamptz(6)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  department         Department          @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  service            Service?            @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  knowledgeDocuments KnowledgeDocument[]
+  analyticsSnapshots AnalyticsSnapshot[]
+
+  @@index([departmentId])
+  @@index([serviceId])
+  @@index([stateCode])
+  @@index([status])
+  @@map("schemes")
+}
+
+model KnowledgeDocument {
+  id                String             @id @default(uuid()) @db.Uuid
+  departmentId      String?            @map("department_id") @db.Uuid
+  serviceId         String?            @map("service_id") @db.Uuid
+  schemeId          String?            @map("scheme_id") @db.Uuid
+  uploadedByUserId  String?            @map("uploaded_by_user_id") @db.Uuid
+  approvedByUserId  String?            @map("approved_by_user_id") @db.Uuid
+  title             String             @db.VarChar(300)
+  sourceType        DocumentSourceType @map("source_type")
+  sourceUrl         String?            @map("source_url") @db.Text
+  sourceReference   String?            @map("source_reference") @db.VarChar(200)
+  languageCode      String             @map("language_code") @db.VarChar(16)
+  checksum          String?            @db.VarChar(128)
+  versionLabel      String?            @map("version_label") @db.VarChar(64)
+  approvalStatus    ApprovalStatus     @default(DRAFT) @map("approval_status")
+  processingStatus  RecordStatus       @default(INACTIVE) @map("processing_status")
+  effectiveFrom     DateTime?          @map("effective_from") @db.Timestamptz(6)
+  effectiveUntil    DateTime?          @map("effective_until") @db.Timestamptz(6)
+  publishedAt       DateTime?          @map("published_at") @db.Timestamptz(6)
+  approvedAt        DateTime?          @map("approved_at") @db.Timestamptz(6)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  department        Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  service           Service?           @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  scheme            Scheme?            @relation(fields: [schemeId], references: [id], onDelete: SetNull)
+  uploadedByUser    User?              @relation("UploadedDocuments", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  approvedByUser    User?              @relation("ApprovedDocuments", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  documentChunks    DocumentChunk[]
+
+  @@index([departmentId])
+  @@index([serviceId])
+  @@index([schemeId])
+  @@index([approvalStatus])
+  @@index([processingStatus])
+  @@map("knowledge_documents")
+}
+
+model DocumentChunk {
+  id                String      @id @default(uuid()) @db.Uuid
+  documentId        String      @map("document_id") @db.Uuid
+  chunkIndex        Int         @map("chunk_index")
+  content           String      @db.Text
+  tokenCount        Int?        @map("token_count")
+  checksum          String?     @db.VarChar(128)
+  languageCode      String?     @map("language_code") @db.VarChar(16)
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  document          KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  embeddings        Embedding[]
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId])
+  @@map("document_chunks")
+}
+
+model Embedding {
+  id                String      @id @default(uuid()) @db.Uuid
+  documentChunkId   String      @map("document_chunk_id") @db.Uuid
+  provider          String      @db.VarChar(80)
+  model             String      @db.VarChar(120)
+  dimensions        Int
+  vector            Unsupported("vector")?
+  checksum          String?     @db.VarChar(128)
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  documentChunk     DocumentChunk @relation(fields: [documentChunkId], references: [id], onDelete: Cascade)
+
+  @@index([documentChunkId])
+  @@index([provider, model])
+  @@map("embeddings")
+}
+
+model Call {
+  id                    String               @id @default(uuid()) @db.Uuid
+  twilioCallSid         String               @unique @map("twilio_call_sid") @db.VarChar(64)
+  assignedDepartmentId  String?              @map("assigned_department_id") @db.Uuid
+  callerPhoneNumber     String?              @map("caller_phone_number") @db.VarChar(32)
+  languageCode          String?              @map("language_code") @db.VarChar(16)
+  status                CallStatus           @default(INITIATED)
+  startedAt             DateTime?            @map("started_at") @db.Timestamptz(6)
+  connectedAt           DateTime?            @map("connected_at") @db.Timestamptz(6)
+  endedAt               DateTime?            @map("ended_at") @db.Timestamptz(6)
+  durationSeconds       Int?                 @map("duration_seconds")
+  confidenceScore       Float?               @map("confidence_score")
+  escalated             Boolean              @default(false)
+  createdAt             DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  assignedDepartment    Department?          @relation(fields: [assignedDepartmentId], references: [id], onDelete: SetNull)
+  callLogs              CallLog[]
+  conversationEntries   ConversationHistory[]
+  tickets               Ticket[]
+  feedbackEntries       Feedback[]
+
+  @@index([status])
+  @@index([languageCode])
+  @@index([assignedDepartmentId])
+  @@map("calls")
+}
+
+model CallLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  callId      String   @map("call_id") @db.Uuid
+  eventType   String   @map("event_type") @db.VarChar(100)
+  message     String?  @db.Text
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  call        Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@index([callId])
+  @@index([eventType])
+  @@map("call_logs")
+}
+
+model ConversationHistory {
+  id               String                  @id @default(uuid()) @db.Uuid
+  callId           String                  @map("call_id") @db.Uuid
+  turnIndex        Int                     @map("turn_index")
+  speakerRole      ConversationSpeakerRole @map("speaker_role")
+  languageCode     String?                 @map("language_code") @db.VarChar(16)
+  content          String                  @db.Text
+  confidenceScore  Float?                  @map("confidence_score")
+  metadata         Json?
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  call             Call                    @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@unique([callId, turnIndex])
+  @@index([speakerRole])
+  @@map("conversation_history")
+}
+
+model AnalyticsSnapshot {
+  id             String       @id @default(uuid()) @db.Uuid
+  departmentId   String?      @map("department_id") @db.Uuid
+  serviceId      String?      @map("service_id") @db.Uuid
+  schemeId       String?      @map("scheme_id") @db.Uuid
+  metricCode     String       @map("metric_code") @db.VarChar(120)
+  metricValue    Float        @map("metric_value")
+  periodStart    DateTime     @map("period_start") @db.Timestamptz(6)
+  periodEnd      DateTime     @map("period_end") @db.Timestamptz(6)
+  dimensions     Json?
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  department     Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  service        Service?     @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  scheme         Scheme?      @relation(fields: [schemeId], references: [id], onDelete: SetNull)
+
+  @@index([departmentId])
+  @@index([serviceId])
+  @@index([schemeId])
+  @@index([metricCode])
+  @@map("analytics_snapshots")
+}
+
+model Feedback {
+  id             String         @id @default(uuid()) @db.Uuid
+  callId         String?        @map("call_id") @db.Uuid
+  userId         String?        @map("user_id") @db.Uuid
+  source         FeedbackSource
+  rating         Int?
+  comment        String?        @db.Text
+  metadata       Json?
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  call           Call?          @relation(fields: [callId], references: [id], onDelete: SetNull)
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([callId])
+  @@index([userId])
+  @@map("feedback")
+}
+
+model Ticket {
+  id               String         @id @default(uuid()) @db.Uuid
+  departmentId     String?        @map("department_id") @db.Uuid
+  assignedToUserId String?        @map("assigned_to_user_id") @db.Uuid
+  callId           String?        @map("call_id") @db.Uuid
+  title            String         @db.VarChar(250)
+  description      String?        @db.Text
+  priority         TicketPriority @default(MEDIUM)
+  status           TicketStatus   @default(OPEN)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  resolvedAt       DateTime?      @map("resolved_at") @db.Timestamptz(6)
+  department       Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  assignedToUser   User?          @relation("AssignedTickets", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  call             Call?          @relation(fields: [callId], references: [id], onDelete: SetNull)
+
+  @@index([departmentId])
+  @@index([assignedToUserId])
+  @@index([callId])
+  @@index([priority])
+  @@index([status])
+  @@map("tickets")
+}
+
+model Notification {
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  type           NotificationType
+  title          String           @db.VarChar(200)
+  body           String           @db.Text
+  metadata       Json?
+  readAt         DateTime?        @map("read_at") @db.Timestamptz(6)
+  deliveredAt    DateTime?        @map("delivered_at") @db.Timestamptz(6)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id             String      @id @default(uuid()) @db.Uuid
+  actorUserId    String?     @map("actor_user_id") @db.Uuid
+  subjectUserId  String?     @map("subject_user_id") @db.Uuid
+  entityType     String      @map("entity_type") @db.VarChar(120)
+  entityId       String?     @map("entity_id") @db.VarChar(120)
+  action         String      @db.VarChar(120)
+  metadata       Json?
+  ipAddress      String?     @map("ip_address") @db.VarChar(64)
+  userAgent      String?     @map("user_agent") @db.VarChar(512)
+  requestId      String?     @map("request_id") @db.VarChar(120)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  actorUser      User?       @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  subjectUser    User?       @relation("AuditLogSubject", fields: [subjectUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId])
+  @@index([subjectUserId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model PlatformSetting {
+  id             String       @id @default(uuid()) @db.Uuid
+  key            String       @unique @db.VarChar(180)
+  value          Json
+  scope          SettingScope @default(SYSTEM)
+  stateCode      String?      @map("state_code") @db.VarChar(8)
+  departmentId   String?      @map("department_id") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  department     Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([scope])
+  @@index([departmentId])
+  @@map("platform_settings")
+}
+
+model DeviceToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique
+  platform  String   @db.VarChar(32) // 'IOS' | 'ANDROID' | 'WEB'
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("device_tokens")
+}
