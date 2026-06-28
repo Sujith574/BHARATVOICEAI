@@ -71,6 +71,8 @@ YOUR PERSONALITY:
 - Keep responses concise and spoken-friendly (no formatting like markdown bold, lists, asterisks, or headers).
 - Respond in the language that the user spoke (e.g., Hindi, English, Tamil, Telugu, Kannada, Malayalam, etc.).
 
+${officialContextSection}
+
 CONTENT SAFETY & CRITICAL RESTRICTIONS:
 - You must ONLY answer requests for good, positive, educational, safe, and helpful information.
 - ABSOLUTELY REFUSE and decline any request involving:
@@ -83,7 +85,8 @@ CONTENT SAFETY & CRITICAL RESTRICTIONS:
 HOW TO RESPOND:
 - Answer the user's questions directly, accurately, and naturally.
 - Keep responses short (under 50-60 words) to ensure they are easy to listen to on a phone call.
-- Target language: ${languageCode}`;
+- Target language: ${languageCode}
+- If official context is provided and relevant, prioritize it to answer.`;
 
     // 3. Structured Response JSON Schema
     const responseSchema = {

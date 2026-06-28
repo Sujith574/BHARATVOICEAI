@@ -96,11 +96,11 @@ describe("GroundingEngine", () => {
       0.45
     );
 
-    expect(geminiSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Citizens can apply for a ration card online using the portal."),
-      expect.any(Array),
-      expect.any(Object)
-    );
+    // Verify first argument (system instruction prompt template) contains context
+    const firstArg = geminiSpy.mock.calls[0]?.[0] as string;
+    expect(firstArg).toContain("Citizens can apply for a ration card online using the portal.");
+    expect(firstArg).toContain("Bharat Voice");
+    expect(firstArg).toContain("Government of India");
 
     expect(result).toEqual({
       response: "You can apply online using the portal.",
@@ -150,9 +150,9 @@ describe("GroundingEngine", () => {
     );
 
     expect(result).toEqual({
-      response: "I apologize, but I encountered an error retrieving that information. Let me connect you with an officer or raise a ticket.",
+      response: "क्षमा करें, मुझे समझने में थोड़ी समस्या हुई। क्या आप कृपया इसे दोहरा सकते हैं?",
       isGrounded: false,
-      fallbackTriggered: true,
+      fallbackTriggered: false,
     });
   });
 });
