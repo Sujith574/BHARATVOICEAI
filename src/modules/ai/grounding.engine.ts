@@ -8,22 +8,12 @@ export interface GroundedResponse {
   fallbackTriggered: boolean;
 }
 
-/**
- * GroundingEngine — the core AI brain of Bharat Voice.
- *
- * Strategy:
- *  - Gemini API answers ALL questions (primary source).
- *  - Official knowledge documents are fetched as supplementary context
- *    when available, but NEVER block the response if unavailable.
- *  - Strict content safety: harmful requests are refused politely.
- *  - Responds in the caller's detected Indian language.
- */
 export class GroundingEngine {
   private readonly systemActor: AuthenticatedUser = {
     id: "system-grounding-actor",
     authUserId: "system-grounding-actor",
-    email: "system@bharatvoice.gov.in",
-    fullName: "Bharat Voice System",
+    email: "system-grounding@bharatvoice.gov.in",
+    fullName: "System Grounding Actor",
     status: "ACTIVE",
     roles: [],
     permissions: ["knowledge.read"],
@@ -35,102 +25,86 @@ export class GroundingEngine {
   ) {}
 
   /**
-   * Generates a response using Gemini as the primary AI brain.
-   * Official documents are fetched for enrichment but never block answers.
+   * Generates a conversational AI response.
+   * - Agent Identity: "Bharat Voice", developed by the Government of India.
+   * - Answers all positive/helpful citizen questions directly via Gemini API.
+   * - Restricts answers to positive, legal, safe, and clean content.
    */
   public async generateGroundedResponse(
     query: string,
     history: { role: "user" | "model"; parts: { text: string }[] }[],
     languageCode: string
   ): Promise<GroundedResponse> {
-    // ── Step 1: Try to fetch official document context (best-effort, never blocking) ──
     let officialContext = "";
     try {
-      const results = await this.knowledgeService.search(
+      const searchResults = await this.knowledgeService.search(
         this.systemActor,
         query,
         5,
         0.45
       );
-      if (results.length > 0) {
-        officialContext = results
-          .map(
-            (r, i) =>
-              `[Government Document ${i + 1} – ${r.documentTitle}]:\n${r.content}`
-          )
+
+      if (searchResults.length > 0) {
+        officialContext = searchResults
+          .map((res, index) => `[Official Source ${index + 1} – ${res.documentTitle}]:\n${res.content}`)
           .join("\n\n");
       }
     } catch {
-      // Knowledge search failure must never block the Gemini response
+      // Best effort; search failures do not block conversational AI flow
     }
 
-    const contextBlock = officialContext
-      ? `OFFICIAL GOVERNMENT DOCUMENTS (use for precise answers when relevant):\n${officialContext}`
-      : "";
+    const officialContextSection = officialContext
+      ? `OFFICIAL CONTEXT (use this to prioritize local info if relevant):\n${officialContext}`
+      : "No local official documents matched this query.";
 
-    // ── Step 2: System prompt — Bharat Voice identity + Gemini-first approach ──
-    const systemInstruction = `You are Bharat Voice — an official AI voice assistant developed by the Government of India to guide and assist every citizen of India.
+    // 2. System instruction defining: "Bharat Voice", developed by Govt of India, answering all questions from Gemini, filtering bad content.
+    const systemInstruction = `You are "Bharat Voice" — the official 24x7 Government Citizen Assistance AI assistant, developed by the Government of India.
+Your mission is to guide people in India by answering their questions and providing helpful information on any topic.
 
-IDENTITY:
-- Your name is "Bharat Voice".
-- You are developed by the Government of India.
-- You are available 24x7 to help all Indian citizens — regardless of language, state, or background.
-- You are friendly, warm, trustworthy, and speak like a knowledgeable but approachable government helper.
+IDENTITY & COMPLIANCE:
+- You are named "Bharat Voice".
+- You were developed by the Government of India.
+- You answer all questions using your internal intelligence via the Gemini API (using official context where available and relevant, but otherwise answering general queries directly).
 
-YOUR PURPOSE:
-- Help citizens with ANY question — government schemes, health, education, agriculture, law, science, history, geography, culture, technology, everyday life, and more.
-- Provide accurate, helpful, and positive information using your knowledge.
-- When official government documents are provided below, use them for precise and authoritative answers.
-- When no official documents match, use your own knowledge (Gemini) to give a comprehensive, helpful answer.
+YOUR PERSONALITY:
+- Be warm, extremely polite, respectful, and helpful.
+- Keep responses concise and spoken-friendly (no formatting like markdown bold, lists, asterisks, or headers).
+- Respond in the language that the user spoke (e.g., Hindi, English, Tamil, Telugu, Kannada, Malayalam, etc.).
 
-${contextBlock}
+CONTENT SAFETY & CRITICAL RESTRICTIONS:
+- You must ONLY answer requests for good, positive, educational, safe, and helpful information.
+- ABSOLUTELY REFUSE and decline any request involving:
+  1. Harmful, dangerous, violent, illegal, or criminal activities.
+  2. Adult, vulgar, sexually explicit, or inappropriate language/content.
+  3. Hate speech, discrimination, political disputes, or communal tension.
+  4. Scams, fraud, cheating, or malicious advice.
+- If a user asks about harmful/inappropriate content, refuse politely: "I apologize, but as Bharat Voice developed by the Government of India, I can only assist with positive and helpful information. How else can I help you today?"
 
-LANGUAGE:
-- ALWAYS reply in the EXACT same language the user spoke.
-- If the user speaks Hindi, reply in Hindi. Tamil → Tamil. Telugu → Telugu. Kannada → Kannada. Malayalam → Malayalam. Bengali → Bengali. English → English. Mixed → match their mix.
-- Current detected language code: ${languageCode}
-- Never use markdown formatting — no asterisks, no bullet points, no headers. This is a voice call and text is read aloud.
-- Keep responses natural, conversational, and under 60 words. Speak clearly and warmly.
+HOW TO RESPOND:
+- Answer the user's questions directly, accurately, and naturally.
+- Keep responses short (under 50-60 words) to ensure they are easy to listen to on a phone call.
+- Target language: ${languageCode}`;
 
-CONTENT SAFETY — STRICT RULES (never break these under any circumstance):
-1. REFUSE requests involving violence, weapons, terrorism, drugs, or harming any person.
-2. REFUSE any sexually explicit, vulgar, or adult content.
-3. REFUSE content promoting hate speech, religious/caste discrimination, or communal tension.
-4. REFUSE help with fraud, scams, hacking, illegal activities, or misinformation.
-5. REFUSE anything that defames the Government of India or spreads political propaganda.
-6. When refusing, say kindly: "मुझे खेद है, मैं इस विषय पर मदद नहीं कर सकता। कोई और जानकारी चाहिए तो बताइए।" (or in the user's language).
-
-RESPONSE RULES:
-- isGrounded: true → if you used official government document context to answer.
-- isGrounded: false → if you used your own Gemini knowledge (general answer).
-- fallbackTriggered: true → ONLY if the request was refused for safety reasons.
-- fallbackTriggered: false → for ALL other answers (whether from documents or general knowledge).
-- NEVER set fallbackTriggered to true just because no documents matched. Gemini always knows enough to answer!`;
-
-    // ── Step 3: Structured JSON schema ──
+    // 3. Structured Response JSON Schema
     const responseSchema = {
       type: "OBJECT",
       properties: {
         response: {
           type: "STRING",
-          description:
-            "Natural spoken voice response in the caller's language. No markdown. Under 60 words where possible.",
+          description: "Friendly conversational response in the target language. No markdown syntax.",
         },
         isGrounded: {
           type: "BOOLEAN",
-          description:
-            "true if the response used official government document context. false if answered from general Gemini knowledge.",
+          description: "True if answered using official document context, False otherwise.",
         },
         fallbackTriggered: {
           type: "BOOLEAN",
-          description:
-            "true ONLY when refusing harmful/bad content. false for all normal helpful answers.",
+          description: "True ONLY if the request was refused due to harmful/bad content.",
         },
       },
       required: ["response", "isGrounded", "fallbackTriggered"],
     };
 
-    // ── Step 4: Build conversation contents ──
     const contents = [
       ...history,
       {
@@ -139,7 +113,6 @@ RESPONSE RULES:
       },
     ];
 
-    // ── Step 5: Call Gemini API ──
     try {
       const rawJson = await this.geminiService.generateGroundedChatResponse(
         systemInstruction,
@@ -150,17 +123,13 @@ RESPONSE RULES:
       const parsed = JSON.parse(rawJson) as Partial<GroundedResponse>;
 
       return {
-        response:
-          parsed.response ??
-          "मैं आपकी बात सुन रहा हूँ। क्या आप दोबारा बता सकते हैं?",
+        response: parsed.response ?? "मैं आपकी सहायता के लिए तैयार हूँ। कृपया अपना प्रश्न पूछें।",
         isGrounded: parsed.isGrounded ?? false,
         fallbackTriggered: parsed.fallbackTriggered ?? false,
       };
     } catch {
-      // Any Gemini API failure — return a friendly retry message
       return {
-        response:
-          "मुझे एक छोटी सी तकनीकी समस्या आई। क्या आप अपना सवाल दोबारा पूछ सकते हैं?",
+        response: "क्षमा करें, मुझे समझने में थोड़ी समस्या हुई। क्या आप कृपया इसे दोहरा सकते हैं?",
         isGrounded: false,
         fallbackTriggered: false,
       };
